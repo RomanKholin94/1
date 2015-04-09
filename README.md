@@ -12,6 +12,7 @@
 │  			├── database.py
 │  			└── ordered_set.py
 ├── libmydb.so
+aaaaaa
 ├── mydb.c									 - Базовая реализация
 ├── mydb.h									 - Базовый хедер
 ├── runner
