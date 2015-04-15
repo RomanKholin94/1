@@ -40,7 +40,7 @@ struct DB {
 	int (*check)(struct DB *, struct NODE *, struct NODE *, int);
 	int (*merge)(struct DB *, struct NODE *, struct NODE *, struct NODE *, int);
 	
-	int (*debug)(struct DB *, size_t);
+	int (*debug)(struct DB *, size_t, FILE * f);
 };
 
 struct DBC {
