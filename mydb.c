@@ -256,11 +256,15 @@ int myNodeDel(struct DB *db, size_t numberOfblock, struct DBT *key) {
 	while (i < root->size && db->cmp(key, root->keys[i]) > 0) {
 		++i;
 	}
+	/*if (i < root->size) {
+		printf("%s %d\n", root->keys[i]->data, db->cmp(key, root->keys[i]));
+	}*/
 	//printf("%d %d %d\n", i, root->size, root->leaf);
 	if ((i == root->size || db->cmp(key, root->keys[i]) != 0) && root->leaf == 1) {
 		db->deAllocator(db, root);
 		return 0;
 	} else if (i < root->size && db->cmp(key, root->keys[i]) == 0) {
+		//printf("del key\n");
 		if (root->leaf == 1) {
 			--root->size;
 			//printf("ok leaf\n");
@@ -288,10 +292,10 @@ int myNodeDel(struct DB *db, size_t numberOfblock, struct DBT *key) {
 					newRoot = left;
 					left = (struct NODE *)calloc(1, sizeof(struct NODE));
 					db->allocator(db, left);
-					left->numberOfBlock = left->child[left->size];
+					left->numberOfBlock = newRoot->child[newRoot->size];
 					db->nodeReadDisk(db, left);
 					//printf("%s, %s\n", newRoot->keys[0]->data, left->keys[0]->data);
-					db->check(db, newRoot, left, newRoot->size - 1);
+					db->check(db, newRoot, left, newRoot->size);
 					//printf("%d, %d\n", newRoot->size, left->size);
 				}
 				//printf("ok!!! %d %d\n", left->leaf, left->size);
@@ -311,9 +315,15 @@ int myNodeDel(struct DB *db, size_t numberOfblock, struct DBT *key) {
 					newRoot = right;
 					right = (struct NODE *)calloc(1, sizeof(struct NODE));
 					db->allocator(db, right);
-					right->numberOfBlock = right->child[0];
+					right->numberOfBlock = newRoot->child[0];
 					db->nodeReadDisk(db, right);
+					/*for (j = 0; j <= newRoot->size; ++j) {
+						printf("%zu ", newRoot->child[j]);
+					}
+					printf("\n");*/
+					//printf("%s, %d, %s, %d\n", newRoot->keys[0]->data, newRoot->size, right->keys[0]->data, right->size);
 					db->check(db, newRoot, right, 0);
+					//printf("%d, %d\n", newRoot->size, right->size);
 				}
 				root->keys[i]->data = right->keys[0]->data;
 				root->keys[i]->size = right->keys[0]->size;
@@ -366,17 +376,20 @@ int myCheck(struct DB *db, struct NODE *root, struct NODE *node, int i) {
 	struct NODE *right = (struct NODE *)calloc(1, sizeof(struct NODE));	
 	//printf("t = %d, size = %d\n", db->t, node->size);
 	if (node->size >= db->t) {
+		//printf("OK111\n");
 		return 0;
 	}
 	if (i > 0) {
 		db->allocator(db, left);
 		left->numberOfBlock = root->child[i - 1];
 		db->nodeReadDisk(db, left);
+		//printf("left = %s\n", left->keys[0]->data);
 	}
 	if (i < root->size) {
 		db->allocator(db, right);
 		right->numberOfBlock = root->child[i + 1];
 		db->nodeReadDisk(db, right);
+		//printf("right = %s\n", right->keys[0]->data);
 	} 
 	if (i > 0 && left->size >= db->t) {
 		node->size += 1;
@@ -495,9 +508,12 @@ int myDebug(struct DB *db, size_t numberOfBlock, FILE * f) {
 	//fprintf(f, "%d\n", node->size);
 	for (i = 0; i < node->size; ++i) {
 		if (node->leaf == 0) {
-			//db->debug(db, node->child[i]);
+		//	db->debug(db, node->child[i], f);
 		}
 		fprintf(f, "%s %s\n", node->keys[i]->data, node->data[i]->data);
+	}
+	if (node->leaf == 0) {
+	//	db->debug(db, node->child[i], f);
 	}
 	fprintf(f, "\n");
 	for (i = 0; i <= node->size; ++i) {
@@ -511,7 +527,7 @@ int myClose(struct DB *db) {
 	FILE *f;
 	f = fopen("debug.txt", "w");
 	//printf("ok\n");
-	db->debug(db, db->root, f);
+	//db->debug(db, db->root, f);
 	fclose(f);
 }
 
@@ -521,12 +537,19 @@ int myNodeReadDisk(struct DB *db, struct NODE *node) {
 	fscanf(db->f, "%zu", &(node->size));
 	fscanf(db->f, "%zu", &(node->leaf));
 	for (i = 0; i < node->size; ++i) {
-		fscanf(db->f, "%zu\n", &(node->keys[i]->size));
+		fscanf(db->f, "%zu", &(node->keys[i]->size));
+		//printf("%zu\n", node->keys[i]->size);
 		node->keys[i]->data = (char *) calloc(node->keys[i]->size + 1,  sizeof(char));
+		fread (node->keys[i]->data, 1, 1, db->f);
 		fread (node->keys[i]->data, 1, node->keys[i]->size, db->f);
-		fscanf(db->f, "%zu\n", &(node->data[i]->size));
+		//printf("!!! %s\n", node->keys[i]->data);
+		
+		fscanf(db->f, "%zu", &(node->data[i]->size));
+		//printf("%zu", node->data[i]->size);
 		node->data[i]->data = (char *) calloc(node->data[i]->size + 1,  sizeof(char));
+		fread (node->data[i]->data, 1, 1, db->f);
 		fread (node->data[i]->data, 1, node->data[i]->size, db->f);
+		//printf("!!! %s\n", node->data[i]->data);
 	}
 	for(i = 0; i <= node->size; ++i) {
 		fscanf(db->f, "%zu", &node->child[i]);
@@ -538,10 +561,16 @@ int myNodeWriteDisk(struct DB *db, struct NODE *node) {
 	fseek(db->f, db->blockSize * (node->numberOfBlock), SEEK_SET);
 	fprintf(db->f, "%zu\n", node->size);
 	fprintf(db->f, "%zu\n", node->leaf);
+	//printf("%zu\n", node->size);
+	//printf("%zu\n", node->leaf);
 	for (i = 0; i < node->size; ++i) {
 		fprintf(db->f, "%zu\n", node->keys[i]->size);
+		//printf("%zu\n", node->keys[i]->size);
 		fwrite(node->keys[i]->data, sizeof(char), node->keys[i]->size, db->f);
+		//printf("!!! %s\n", node->keys[i]->data);
+		//write(node->keys[i]->data, sizeof(char), node->keys[i]->size);
 		fprintf(db->f, "%zu\n", node->data[i]->size);
+		//printf("%zu\n", node->data[i]->size);
 		fwrite (node->data[i]->data, sizeof(char), node->data[i]->size, db->f);
 	}
 	for (i = 0; i <= node->size; ++i) {
