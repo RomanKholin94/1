@@ -16,6 +16,27 @@ struct NODE {
 	size_t * child;
 };
 
+struct POINTER {
+	struct NODE * a;
+};
+
+struct NL {
+	struct NODE * page;
+	struct NL * link;
+	struct NL * next;
+	struct NL * prev;
+};
+
+struct LIST {
+	struct NL * first;
+	struct NL * last;
+};
+
+struct HASH {
+	size_t size;
+	struct LIST ** data;
+};
+
 struct DB {
 	FILE * f;
 	void * env;
@@ -23,22 +44,31 @@ struct DB {
 	size_t t;
 	size_t numberOfBlocks;
 	size_t root;
+	size_t numberOfPages;
+	size_t cashSize;
+	struct LIST * L;
+	struct HASH * H;
 		
 	int (*insert)(struct DB *db, struct DBT *key, struct DBT *data);
-	int (*nodeInsert)(struct DB *, struct NODE *, struct DBT *, struct DBT *);
-	int (*nodeSplit)(struct DB *, struct NODE *, struct NODE *, size_t);
+	int (*nodeInsert)(struct DB *, struct POINTER *, struct DBT *, struct DBT *);
+	int (*nodeSplit)(struct DB *, struct POINTER *, struct POINTER *, size_t);
 	int (*select)(struct DB *db, struct DBT *key, struct DBT *data);
 	int (*nodeSelect)(struct DB *, size_t, struct DBT *, struct DBT *);
 	int (*del)(struct DB *db, struct DBT *key);
 	int (*close)(struct DB *db);
-	int (*nodeReadDisk)(struct DB *, struct NODE *);
+	int (*nodeReadDisk)(struct DB *, struct POINTER *,  size_t);
 	int (*nodeWriteDisk)(struct DB *, struct NODE *);
-	int (*allocator)(struct DB *, struct NODE *);
+	int (*allocator)(struct DB *, struct POINTER *);
 	int (*deAllocator)(struct DB *, struct NODE *);
 	int (*cmp)(struct DBT *, struct DBT *);
 	int (*nodeDel)(struct DB *, size_t, struct DBT *);
-	int (*check)(struct DB *, struct NODE *, struct NODE *, int);
-	int (*merge)(struct DB *, struct NODE *, struct NODE *, struct NODE *, int);
+	int (*check)(struct DB *, struct POINTER *, struct POINTER *, int);
+	int (*merge)(struct DB *, struct POINTER *, struct POINTER *, struct POINTER *, int);
+	int (*searchHash)(struct DB *, size_t, struct POINTER *);
+	int (*removeHash)(struct DB *);
+	int (*addHash)(struct DB *, struct POINTER *);
+	int (*remove)(struct LIST *, struct NL *);
+	int (*add)(struct LIST *, struct NL *, struct NL *);
 	
 	int (*debug)(struct DB *, size_t, FILE * f);
 };

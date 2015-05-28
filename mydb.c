@@ -43,155 +43,182 @@ int db_close(struct DB *db) {
 
 int myInsert(struct DB *db, struct DBT *key, struct DBT *data) {
 	int i = 0;
-	struct NODE *root = (struct NODE *)calloc(1, sizeof(struct NODE));
-	db->allocator(db, root);
-	root->numberOfBlock = db->root;
-	db->nodeReadDisk(db, root);
-	for (i = 0; i < root->size; ++i) {
-		if (db->cmp(key, root->keys[i]) == 0) {
+	struct POINTER *root =  (struct POINTER *)calloc(1, sizeof(struct POINTER));
+	root->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+	//db->allocator(db, root);
+	//root->numberOfBlock = db->root;
+	db->nodeReadDisk(db, root, db->root);
+	//printf("%d\n", root->size);
+	for (i = 0; i < root->a->size; ++i) {
+		if (db->cmp(key, root->a->keys[i]) == 0) {
 			//printf("ok1\n");
-			root->data[i]->size = data->size;
-			free(root->data[i]->data);
-			root->data[i]->data = (char *)calloc(data->size + 1, sizeof(char));
-			memcpy(root->data[i]->data, data->data, data->size + 1);
-			db->nodeWriteDisk(db, root);
-			db->deAllocator(db, root);
+			root->a->data[i]->size = data->size;
+			free(root->a->data[i]->data);
+			root->a->data[i]->data = (char *)calloc(data->size + 1, sizeof(char));
+			memcpy(root->a->data[i]->data, data->data, data->size + 1);
+			//db->nodeWriteDisk(db, root);
+			//printf("1\n");
+			//db->deAllocator(db, root);
 			return 0;
 		}
 	}
-	if (root->size == 2 * db->t - 1) {
-		struct NODE *newRoot = (struct NODE *)calloc(1, sizeof(struct NODE));
+	if (root->a->size == 2 * db->t - 1) {
+		if (db->cashSize == db->numberOfPages) {
+			db->removeHash(db);
+		}
+		struct POINTER *newRoot = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+		newRoot->a = (struct NODE *)calloc(1, sizeof(struct NODE));
 		db->allocator(db, newRoot);
-		newRoot->size = 0;
-		newRoot->leaf = 0;
-		newRoot->child[0] = root->numberOfBlock;
+		newRoot->a->size = 0;
+		newRoot->a->leaf = 0;
+		newRoot->a->child[0] = root->a->numberOfBlock;
 		db->numberOfBlocks += 1;
-		newRoot->numberOfBlock = db->numberOfBlocks - 1;
-		db->root = newRoot->numberOfBlock; 
+		newRoot->a->numberOfBlock = db->numberOfBlocks - 1;
+		db->root = newRoot->a->numberOfBlock; 
 		db->nodeSplit(db, newRoot, root, 0);
-		newRoot->leaf = 0;
-		if (db->cmp(key, newRoot->keys[0]) < 0) {
-			newRoot->numberOfBlock = newRoot->child[0];
-			db->nodeReadDisk(db, newRoot);
+		db->addHash(db, newRoot);
+		//printf("root = %s\n", newRoot->keys[0]->data);
+		newRoot->a->leaf = 0;
+		if (db->cmp(key, newRoot->a->keys[0]) < 0) {
+			//newRoot->numberOfBlock = newRoot->child[0];
+			db->nodeReadDisk(db, newRoot, newRoot->a->child[0]);
 			db->nodeInsert(db, newRoot, key, data);
-		} else if (db->cmp(key, newRoot->keys[0]) > 0) {
-		newRoot->numberOfBlock = newRoot->child[1];
-			db->nodeReadDisk(db, newRoot);
+		} else if (db->cmp(key, newRoot->a->keys[0]) > 0) {
+			//newRoot->numberOfBlock = newRoot->child[1];
+			db->nodeReadDisk(db, newRoot, newRoot->a->child[1]);
 			db->nodeInsert(db, newRoot, key, data);
 		} else {
 			
 		}
-		db->deAllocator(db, newRoot);
+		//printf("2\n");
+		//db->deAllocator(db, newRoot);
 	} else {
+		//printf("insert\n");
 		db->nodeInsert(db, root, key, data);
 	}
-	db->deAllocator(db, root);
+	//printf("3\n");
+	//db->deAllocator(db, root);
 	//printf("numberOfBlocks = %zu\n", db->numberOfBlocks);
 } 
 
-int myNodeInsert(struct DB *db, struct NODE *node, struct DBT *key, struct DBT *data) {
+int myNodeInsert(struct DB *db, struct POINTER *node, struct DBT *key, struct DBT *data) {
 	int i, j;
-	i = node->size - 1;
+	i = node->a->size - 1;
 	//printf("ok\n");
-	if (node->leaf == 1) {
-		while(i >= 0 && db->cmp(key, node->keys[i]) < 0) {
-			node->keys[i + 1]->data = node->keys[i]->data;
-			node->keys[i + 1]->size = node->keys[i]->size;
-			node->data[i + 1]->data = node->data[i]->data;
-			node->data[i + 1]->size = node->data[i]->size;
+	//printf("aaaa %d\n", node->a->numberOfBlock);
+	if (node->a->leaf == 1) {
+		while(i >= 0 && db->cmp(key, node->a->keys[i]) < 0) {
+			node->a->keys[i + 1]->data = node->a->keys[i]->data;
+			node->a->keys[i + 1]->size = node->a->keys[i]->size;
+			node->a->data[i + 1]->data = node->a->data[i]->data;
+			node->a->data[i + 1]->size = node->a->data[i]->size;
 			--i;
 		}
 		++i;
-		node->keys[i]->size = key->size;
-		node->keys[i]->data = (char *)calloc(key->size + 1, sizeof(char));
-		memcpy(node->keys[i]->data, key->data, key->size + 1);
-		node->data[i]->size = data->size;
-		node->data[i]->data = (char *)calloc(data->size + 1, sizeof(char));
-		memcpy(node->data[i]->data, data->data, data->size + 1);
+		node->a->keys[i]->size = key->size;
+		node->a->keys[i]->data = (char *)calloc(key->size + 1, sizeof(char));
+		memcpy(node->a->keys[i]->data, key->data, key->size + 1);
+		node->a->data[i]->size = data->size;
+		node->a->data[i]->data = (char *)calloc(data->size + 1, sizeof(char));
+		memcpy(node->a->data[i]->data, data->data, data->size + 1);
 		//printf("%s\n", node->keys[i]->data);
 		//printf("%d %s - NULL\n", node->keys[0]->size, node->keys[0]->data);
 		//printf("%d %s - NULL\n", node->keys[i]->size, node->keys[i]->data);
 		//printf("%d %s\n", i, key->data);
-		node->size += 1;
-		db->nodeWriteDisk(db, node);
+		node->a->size += 1;
+		//printf("%d\n", node->a->numberOfBlock);
+		//db->nodeWriteDisk(db, node);
 	} else {
-		while(i >= 0 && db->cmp(key, node->keys[i]) < 0) {
+		while(i >= 0 && db->cmp(key, node->a->keys[i]) < 0) {
 			--i;
 		}
 		++i;
-		struct NODE *child = (struct NODE *)calloc(1, sizeof(struct NODE));
-		db->allocator(db, child);
-		child->numberOfBlock = node->child[i];
-		db->nodeReadDisk(db, child);
-		for (j = 0; j < child->size; ++j) {
-			if (db->cmp(key, child->keys[j]) == 0) {
+		struct POINTER *child = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+		child->a = (struct NODE *)calloc(1, sizeof(struct NODE)); 
+		//db->allocator(db, child);
+		//child->numberOfBlock = node->child[i];
+		db->nodeReadDisk(db, child, node->a->child[i]);
+		for (j = 0; j < child->a->size; ++j) {
+			if (db->cmp(key, child->a->keys[j]) == 0) {
 				//printf("ok2\n");
-				child->data[j]->size = data->size;
-				free(child->data[j]->data);
-				child->data[j]->data = (char *)calloc(data->size + 1, sizeof(char));
-				memcpy(child->data[j]->data, data->data, data->size + 1);
-				db->nodeWriteDisk(db, child);
-				db->deAllocator(db, child);
+				child->a->data[j]->size = data->size;
+				free(child->a->data[j]->data);
+				child->a->data[j]->data = (char *)calloc(data->size + 1, sizeof(char));
+				memcpy(child->a->data[j]->data, data->data, data->size + 1);
+				//db->nodeWriteDisk(db, child);
+				//printf("4\n");
+				//db->deAllocator(db, child);
 				return 0;
 			}
 		}
-		if (child->size == 2 * db->t - 1) {
+		if (child->a->size == 2 * db->t - 1) {
 			db->nodeSplit(db, node, child, i);
-			if (db->cmp(key, node->keys[i]) > 0) {
+			if (db->cmp(key, node->a->keys[i]) > 0) {
 				++i;
 			}
 		}
-		db->deAllocator(db, child);
-		child = (struct NODE *)calloc(1, sizeof(struct NODE));
-		db->allocator(db, child);
-		child->numberOfBlock = node->child[i];
-		db->nodeReadDisk(db, child);
+		//printf("5\n");
+		//db->deAllocator(db, child);
+		child = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+		child->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+		//db->allocator(db, child);
+		//child->numberOfBlock = node->child[i];
+		db->nodeReadDisk(db, child, node->a->child[i]);
 		
 		db->nodeInsert(db, child, key, data);
 		
-		db->deAllocator(db, child);
+		//printf("6\n");
+		//db->deAllocator(db, child);
 	}
 }
 
-int myNodeSplit(struct DB *db, struct NODE *node, struct NODE *child, size_t i) {
+int myNodeSplit(struct DB *db, struct POINTER *node, struct POINTER *child, size_t i) {
 	int t = db->t, j;
-	struct NODE *child2 = (struct NODE *)calloc(1, sizeof(struct NODE));
+	if (db->cashSize == db->numberOfPages) {
+		db->removeHash(db);
+	}
+	struct POINTER *child2 = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+	child2->a = (struct NODE *)calloc(1, sizeof(struct NODE));
 	db->allocator(db, child2);
-	node->size += 1;
-	for (j = node->size - 1; i < j; --j) {
-		node->keys[j]->data = node->keys[j - 1]->data;
-		node->keys[j]->size = node->keys[j - 1]->size;
-		node->data[j]->data = node->data[j - 1]->data;
-		node->data[j]->size = node->data[j - 1]->size;
-		node->child[j + 1] = node->child[j];
+	node->a->size += 1;
+	for (j = node->a->size - 1; i < j; --j) {
+		node->a->keys[j]->data = node->a->keys[j - 1]->data;
+		node->a->keys[j]->size = node->a->keys[j - 1]->size;
+		node->a->data[j]->data = node->a->data[j - 1]->data;
+		node->a->data[j]->size = node->a->data[j - 1]->size;
+		node->a->child[j + 1] = node->a->child[j];
 	}
 	db->numberOfBlocks += 1;
-	node->child[i + 1] = db->numberOfBlocks - 1;
-	child2->numberOfBlock = db->numberOfBlocks - 1;
-	node->keys[i]->data = child->keys[t - 1]->data;
-	node->keys[i]->size = child->keys[t - 1]->size;
-	node->data[i]->data = child->data[t - 1]->data;
-	node->data[i]->size = child->data[t - 1]->size;
-	child2->size = t - 1;
+	node->a->child[i + 1] = db->numberOfBlocks - 1;
+	child2->a->numberOfBlock = db->numberOfBlocks - 1;
+	node->a->keys[i]->data = child->a->keys[t - 1]->data;
+	node->a->keys[i]->size = child->a->keys[t - 1]->size;
+	node->a->data[i]->data = child->a->data[t - 1]->data;
+	node->a->data[i]->size = child->a->data[t - 1]->size;
+	//printf("t = %d\n", t);
+	child2->a->size = t - 1;
 	for (j = t; j < 2 * t - 1; ++j) {
-		child2->keys[j - t]->data = child->keys[j]->data;
-		child->keys[j]->data = 0;
-		child2->keys[j - t]->size = child->keys[j]->size;
+		child2->a->keys[j - t]->data = child->a->keys[j]->data;
+		child->a->keys[j]->data = 0;
+		child2->a->keys[j - t]->size = child->a->keys[j]->size;
 		
-		child2->data[j - t]->data = child->data[j]->data;
-		child->data[j]->data = 0;
-		child2->data[j - t]->size = child->data[j]->size;
+		child2->a->data[j - t]->data = child->a->data[j]->data;
+		child->a->data[j]->data = 0;
+		child2->a->data[j - t]->size = child->a->data[j]->size;
 		
-		child2->child[j - t] = child->child[j];
+		child2->a->child[j - t] = child->a->child[j];
 	}
-	child2->child[t - 1] = child->child[2 * t - 1];
-	child->size = t - 1;
-	child2->leaf = child->leaf;
+	child2->a->child[t - 1] = child->a->child[2 * t - 1];
+	child->a->size = t - 1;
+	//printf("t = %d\n", t);
+	child2->a->leaf = child->a->leaf;
 	//printf("%s %s %s\n", node->keys[0]->data, child->keys[0]->data, child2->keys[0]->data);
-	db->nodeWriteDisk(db, node);
-	db->nodeWriteDisk(db, child);
-	db->nodeWriteDisk(db, child2);
-	db->deAllocator(db, child2);
+	//db->nodeWriteDisk(db, node);
+	//db->nodeWriteDisk(db, child);
+	//db->nodeWriteDisk(db, child2);
+	db->addHash(db, child2);
+	//printf("7\n");
+	//db->deAllocator(db, child2);
 }
 
 int mySelect(struct DB *db, struct DBT *key, struct DBT *data) {
@@ -201,41 +228,45 @@ int mySelect(struct DB *db, struct DBT *key, struct DBT *data) {
 
 int myNodeSelect(struct DB *db, size_t pointer, struct DBT *key, struct DBT *data) {
 	int i = 0;
-	struct NODE *node = (struct NODE *)calloc(1, sizeof(struct NODE));
-	db->allocator(db, node);
-	node->numberOfBlock = pointer;
-	db->nodeReadDisk(db, node);
+	struct POINTER *node = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+	node->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+	//db->allocator(db, node);
+	//node->numberOfBlock = pointer;
+	db->nodeReadDisk(db, node, pointer);
+	//printf("%d %d\n", node->a->size, pointer);
 	//printf("select = %s\n", node->keys[0]->data);
-	while(i < node->size && db->cmp(key, node->keys[i]) > 0) {
+	while(i < node->a->size && db->cmp(key, node->a->keys[i]) > 0) {
 		++i;
 	}
-	if (i < node->size && db->cmp(key, node->keys[i]) == 0) {
+	if (i < node->a->size && db->cmp(key, node->a->keys[i]) == 0) {
 		//printf("ok\n");
-		char *ans = (char *) calloc(node->data[i]->size + 1, sizeof(char));
-		memcpy(ans, node->data[i]->data, node->data[i]->size + 1);
+		char *ans = (char *) calloc(node->a->data[i]->size + 1, sizeof(char));
+		memcpy(ans, node->a->data[i]->data, node->a->data[i]->size + 1);
 		data->data = ans;
-		data->size = node->data[i]->size;
-	} else if (node->leaf == 0) {
+		data->size = node->a->data[i]->size;
+	} else if (node->a->leaf == 0) {
 		//printf("%d\n", i);
 		if (i < 0) {
 			printf("aaaaaa\n");
 			return 0;
 		}
-		db->nodeSelect(db, node->child[i], key, data);
+		db->nodeSelect(db, node->a->child[i], key, data);
 	}
-	db->deAllocator(db, node);
+	//printf("8\n");
+	//db->deAllocator(db, node);
 }
 
 int myDel(struct DB *db, struct DBT *key) {
 	//printf("ok\n");
 	//db->Debug(db, db->root);
 	db->nodeDel(db, db->root, key);
-	struct NODE *root = (struct NODE *)calloc(1, sizeof(struct NODE));
-	db->allocator(db, root);
-	root->numberOfBlock = db->root;
-	db->nodeReadDisk(db, root);
-	if (root->size == 0) {
-		db->root = root->child[0];
+	struct POINTER *root = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+	root->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+	//db->allocator(db, root);
+	//root->numberOfBlock = db->root;
+	db->nodeReadDisk(db, root, db->root);
+	if (root->a->size == 0) {
+		db->root = root->a->child[0];
 	}
 	return 0;
 }
@@ -243,80 +274,87 @@ int myDel(struct DB *db, struct DBT *key) {
 int myNodeDel(struct DB *db, size_t numberOfblock, struct DBT *key) {
 	//printf("%d\n", numberOfblock);
 	int i, j, k;
-	struct NODE *root = (struct NODE *)calloc(1, sizeof(struct NODE));
-	db->allocator(db, root);
-	root->numberOfBlock = numberOfblock;
-	db->nodeReadDisk(db, root);
-	if (root->size == 0) {
-		db->deAllocator(db, root);
+	struct POINTER *root = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+	root->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+	//db->allocator(db, root);
+	//root->numberOfBlock = numberOfblock;
+	db->nodeReadDisk(db, root, numberOfblock);
+	if (root->a->size == 0) {
+		//printf("9\n");
+		//db->deAllocator(db, root);
 		return 0;
 	}
 	//printf("%s\n", root->keys[0]->data);
 	i = 0;
-	while (i < root->size && db->cmp(key, root->keys[i]) > 0) {
+	while (i < root->a->size && db->cmp(key, root->a->keys[i]) > 0) {
 		++i;
 	}
 	/*if (i < root->size) {
 		printf("%s %d\n", root->keys[i]->data, db->cmp(key, root->keys[i]));
 	}*/
 	//printf("%d %d %d\n", i, root->size, root->leaf);
-	if ((i == root->size || db->cmp(key, root->keys[i]) != 0) && root->leaf == 1) {
-		db->deAllocator(db, root);
+	if ((i == root->a->size || db->cmp(key, root->a->keys[i]) != 0) && root->a->leaf == 1) {
+		//printf("10\n");
+		//db->deAllocator(db, root);
 		return 0;
-	} else if (i < root->size && db->cmp(key, root->keys[i]) == 0) {
+	} else if (i < root->a->size && db->cmp(key, root->a->keys[i]) == 0) {
 		//printf("del key\n");
-		if (root->leaf == 1) {
-			--root->size;
+		if (root->a->leaf == 1) {
+			--root->a->size;
 			//printf("ok leaf\n");
-			for (j = i; j < root->size; ++j) {
-				root->keys[j]->data = root->keys[j + 1]->data;
-				root->keys[j]->size = root->keys[j + 1]->size;
-				root->data[j]->data = root->data[j + 1]->data;
-				root->data[j]->size = root->data[j + 1]->size;
+			for (j = i; j < root->a->size; ++j) {
+				root->a->keys[j]->data = root->a->keys[j + 1]->data;
+				root->a->keys[j]->size = root->a->keys[j + 1]->size;
+				root->a->data[j]->data = root->a->data[j + 1]->data;
+				root->a->data[j]->size = root->a->data[j + 1]->size;
 			}
-			db->nodeWriteDisk(db, root);
+			//db->nodeWriteDisk(db, root);
 		} else {
-			struct NODE *left = (struct NODE *)calloc(1, sizeof(struct NODE));
-			db->allocator(db, left);
-			left->numberOfBlock = root->child[i];
-			db->nodeReadDisk(db, left);
-			struct NODE *right = (struct NODE *)calloc(1, sizeof(struct NODE));
-			db->allocator(db, right);
-			right->numberOfBlock = root->child[i + 1];
-			db->nodeReadDisk(db, right);
+			struct POINTER *left = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+			left->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+			//db->allocator(db, left);
+			//left->numberOfBlock = root->child[i];
+			db->nodeReadDisk(db, left, root->a->child[i]);
+			struct POINTER *right = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+			right->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+			//db->allocator(db, right);
+			//right->numberOfBlock = root->child[i + 1];
+			db->nodeReadDisk(db, right, root->a->child[i + 1]);
 			//printf("ok!!! %d %d %s\n", left->size, right->size, root->keys[i]->data);
-			if (left->size >= db->t) {
+			if (left->a->size >= db->t) {
 				//printf("ok!!! %d %d\n", left->size, right->size);
-				struct NODE *newRoot;
-				while (left->leaf == 0) {
+				struct POINTER *newRoot;
+				while (left->a->leaf == 0) {
 					newRoot = left;
-					left = (struct NODE *)calloc(1, sizeof(struct NODE));
-					db->allocator(db, left);
-					left->numberOfBlock = newRoot->child[newRoot->size];
-					db->nodeReadDisk(db, left);
+					left = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+					left->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+					//db->allocator(db, left);
+					//left->numberOfBlock = newRoot->child[newRoot->size];
+					db->nodeReadDisk(db, left, newRoot->a->child[newRoot->a->size]);
 					//printf("%s, %s\n", newRoot->keys[0]->data, left->keys[0]->data);
-					db->check(db, newRoot, left, newRoot->size);
+					db->check(db, newRoot, left, newRoot->a->size);
 					//printf("%d, %d\n", newRoot->size, left->size);
 				}
 				//printf("ok!!! %d %d\n", left->leaf, left->size);
-				root->keys[i]->data = left->keys[left->size - 1]->data;
-				root->keys[i]->size = left->keys[left->size - 1]->size;
-				root->data[i]->data = left->data[left->size - 1]->data;
-				root->data[i]->size = left->data[left->size - 1]->size;
+				root->a->keys[i]->data = left->a->keys[left->a->size - 1]->data;
+				root->a->keys[i]->size = left->a->keys[left->a->size - 1]->size;
+				root->a->data[i]->data = left->a->data[left->a->size - 1]->data;
+				root->a->data[i]->size = left->a->data[left->a->size - 1]->size;
 				//printf("ok!!!\n");
 				
-				left->size -= 1;
+				left->a->size -= 1;
 				
-				db->nodeWriteDisk(db, root);
-				db->nodeWriteDisk(db, left);
-			} else if (right->size >= db->t) {
-				struct NODE *newRoot;
-				while (right->leaf == 0) {
+				//db->nodeWriteDisk(db, root);
+				//db->nodeWriteDisk(db, left);
+			} else if (right->a->size >= db->t) {
+				struct POINTER *newRoot;
+				while (right->a->leaf == 0) {
 					newRoot = right;
-					right = (struct NODE *)calloc(1, sizeof(struct NODE));
-					db->allocator(db, right);
-					right->numberOfBlock = newRoot->child[0];
-					db->nodeReadDisk(db, right);
+					right = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+					right->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+					//db->allocator(db, right);
+					//right->numberOfBlock = newRoot->child[0];
+					db->nodeReadDisk(db, right, newRoot->a->child[0]);
 					/*for (j = 0; j <= newRoot->size; ++j) {
 						printf("%zu ", newRoot->child[j]);
 					}
@@ -325,186 +363,194 @@ int myNodeDel(struct DB *db, size_t numberOfblock, struct DBT *key) {
 					db->check(db, newRoot, right, 0);
 					//printf("%d, %d\n", newRoot->size, right->size);
 				}
-				root->keys[i]->data = right->keys[0]->data;
-				root->keys[i]->size = right->keys[0]->size;
-				root->data[i]->data = right->data[0]->data;
-				root->data[i]->size = right->data[0]->size;
+				root->a->keys[i]->data = right->a->keys[0]->data;
+				root->a->keys[i]->size = right->a->keys[0]->size;
+				root->a->data[i]->data = right->a->data[0]->data;
+				root->a->data[i]->size = right->a->data[0]->size;
 				
-				right->size -= 1;
-				for (j = 0; j < right->size; ++j) {
-					right->keys[j]->data = right->keys[j + 1]->data;
-					right->keys[j]->size = right->keys[j + 1]->size;
-					right->data[j]->data = right->data[j + 1]->data;
-					right->data[j]->size = right->data[j + 1]->size;
-					right->child[j] = right->child[j + 1];
+				right->a->size -= 1;
+				for (j = 0; j < right->a->size; ++j) {
+					right->a->keys[j]->data = right->a->keys[j + 1]->data;
+					right->a->keys[j]->size = right->a->keys[j + 1]->size;
+					right->a->data[j]->data = right->a->data[j + 1]->data;
+					right->a->data[j]->size = right->a->data[j + 1]->size;
+					right->a->child[j] = right->a->child[j + 1];
 				}
-				right->child[j] = right->child[j + 1];
+				right->a->child[j] = right->a->child[j + 1];
 				
-				db->nodeWriteDisk(db, root);
-				db->nodeWriteDisk(db, right);
+				//db->nodeWriteDisk(db, root);
+				//db->nodeWriteDisk(db, right);
 			} else {
 				//printf("ok\n");
 				db->merge(db, root, left, right, i);
-				db->nodeDel(db, root->child[i], key);
+				db->nodeDel(db, root->a->child[i], key);
 			}
-			db->deAllocator(db, left);
-			db->deAllocator(db, right);
+			//printf("11\n");
+			//db->deAllocator(db, left);
+			//printf("12\n");
+			//db->deAllocator(db, right);
 		}
 	} else {
-		struct NODE *node = (struct NODE *)calloc(1, sizeof(struct NODE));
-		db->allocator(db, node);
-		node->numberOfBlock = root->child[i];
-		db->nodeReadDisk(db, node);
+		struct POINTER *node = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+		node->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+		//db->allocator(db, node);
+		//node->numberOfBlock = root->child[i];
+		db->nodeReadDisk(db, node, root->a->child[i]);
 		//printf("i = %d\n", i);
 		db->check(db, root, node, i);
 		//printf("i = %d\n", i);
 		--i;
-		if (i < 0 || (i < root->size && db->cmp(key, root->keys[i]) > 0)) {
+		if (i < 0 || (i < root->a->size && db->cmp(key, root->a->keys[i]) > 0)) {
 			++i;
 		}
 		//printf("aaaa %d\n", i);
-		db->nodeDel(db, root->child[i], key);
-		db->deAllocator(db, node);
+		db->nodeDel(db, root->a->child[i], key);
+		//printf("13\n");
+		//db->deAllocator(db, node);
 	}
-	db->deAllocator(db, root);
+	//printf("14\n");
+	//db->deAllocator(db, root);
 }
 
-int myCheck(struct DB *db, struct NODE *root, struct NODE *node, int i) {
+int myCheck(struct DB *db, struct POINTER *root, struct POINTER *node, int i) {
 	int j, k;
 	k = i;
-	struct NODE *left = (struct NODE *)calloc(1, sizeof(struct NODE));	
-	struct NODE *right = (struct NODE *)calloc(1, sizeof(struct NODE));	
+	struct POINTER *left = (struct POINTER *)calloc(1, sizeof(struct POINTER));	
+	left->a = (struct NODE *)calloc(1, sizeof(struct NODE));
+	struct POINTER *right = (struct POINTER *)calloc(1, sizeof(struct POINTER));	
+	right->a = (struct NODE *)calloc(1, sizeof(struct NODE));
 	//printf("t = %d, size = %d\n", db->t, node->size);
-	if (node->size >= db->t) {
+	if (node->a->size >= db->t) {
 		//printf("OK111\n");
 		return 0;
 	}
 	if (i > 0) {
-		db->allocator(db, left);
-		left->numberOfBlock = root->child[i - 1];
-		db->nodeReadDisk(db, left);
+		//db->allocator(db, left);
+		//left->numberOfBlock = root->child[i - 1];
+		db->nodeReadDisk(db, left, root->a->child[i - 1]);
 		//printf("left = %s\n", left->keys[0]->data);
 	}
-	if (i < root->size) {
-		db->allocator(db, right);
-		right->numberOfBlock = root->child[i + 1];
-		db->nodeReadDisk(db, right);
+	if (i < root->a->size) {
+		//db->allocator(db, right);
+		//right->numberOfBlock = root->child[i + 1];
+		db->nodeReadDisk(db, right, root->a->child[i + 1]);
 		//printf("right = %s\n", right->keys[0]->data);
 	} 
-	if (i > 0 && left->size >= db->t) {
-		node->size += 1;
+	if (i > 0 && left->a->size >= db->t) {
+		node->a->size += 1;
 		
-		for (j = node->size - 1; j >= 0; --j) {
-			node->keys[j + 1]->data = node->keys[j]->data;
-			node->keys[j + 1]->size = node->keys[j]->size;
-			node->data[j + 1]->data = node->data[j]->data;
-			node->data[j + 1]->size = node->data[j]->size;
-			node->child[j + 2] = node->child[j + 1];
+		for (j = node->a->size - 1; j >= 0; --j) {
+			node->a->keys[j + 1]->data = node->a->keys[j]->data;
+			node->a->keys[j + 1]->size = node->a->keys[j]->size;
+			node->a->data[j + 1]->data = node->a->data[j]->data;
+			node->a->data[j + 1]->size = node->a->data[j]->size;
+			node->a->child[j + 2] = node->a->child[j + 1];
 		}
-		node->child[j + 2] = node->child[j + 1];
+		node->a->child[j + 2] = node->a->child[j + 1];
 		
-		node->keys[0]->data = root->keys[i - 1]->data;
-		node->keys[0]->size = root->keys[i - 1]->size;
-		node->data[0]->data = root->data[i - 1]->data;
-		node->data[0]->size = root->data[i - 1]->size;
-		node->child[0] = left->child[left->size];
+		node->a->keys[0]->data = root->a->keys[i - 1]->data;
+		node->a->keys[0]->size = root->a->keys[i - 1]->size;
+		node->a->data[0]->data = root->a->data[i - 1]->data;
+		node->a->data[0]->size = root->a->data[i - 1]->size;
+		node->a->child[0] = left->a->child[left->a->size];
 		
-		root->keys[i - 1]->data = left->keys[left->size - 1]->data;
-		root->keys[i - 1]->size = left->keys[left->size - 1]->size;
-		root->data[i - 1]->data = left->data[left->size - 1]->data;
-		root->data[i - 1]->size = left->data[left->size - 1]->size;
+		root->a->keys[i - 1]->data = left->a->keys[left->a->size - 1]->data;
+		root->a->keys[i - 1]->size = left->a->keys[left->a->size - 1]->size;
+		root->a->data[i - 1]->data = left->a->data[left->a->size - 1]->data;
+		root->a->data[i - 1]->size = left->a->data[left->a->size - 1]->size;
 	
-		left->size -= 1;
+		left->a->size -= 1;
 		--i;
-		db->nodeWriteDisk(db, left);
-	} else if (i < root->size && right->size >= db->t) {
-		node->size += 1;
-		node->keys[node->size - 1]->data = root->keys[i]->data;
-		node->keys[node->size - 1]->size = root->keys[i]->size;
-		node->data[node->size - 1]->data = root->data[i]->data;
-		node->data[node->size - 1]->size = root->data[i]->size;
-		node->child[node->size] = right->child[0];
+		//db->nodeWriteDisk(db, left);
+	} else if (i < root->a->size && right->a->size >= db->t) {
+		node->a->size += 1;
+		node->a->keys[node->a->size - 1]->data = root->a->keys[i]->data;
+		node->a->keys[node->a->size - 1]->size = root->a->keys[i]->size;
+		node->a->data[node->a->size - 1]->data = root->a->data[i]->data;
+		node->a->data[node->a->size - 1]->size = root->a->data[i]->size;
+		node->a->child[node->a->size] = right->a->child[0];
 		
-		root->keys[i]->data = right->keys[0]->data;
-		root->keys[i]->size = right->keys[0]->size;
-		root->data[i]->data = right->data[0]->data;
-		root->data[i]->size = right->data[0]->size;
+		root->a->keys[i]->data = right->a->keys[0]->data;
+		root->a->keys[i]->size = right->a->keys[0]->size;
+		root->a->data[i]->data = right->a->data[0]->data;
+		root->a->data[i]->size = right->a->data[0]->size;
 		
-		right->size -= 1;
-		for (j = 0; j < right->size; ++j) {
-			right->keys[j]->data = right->keys[j + 1]->data;
-			right->keys[j]->size = right->keys[j + 1]->size;
-			right->data[j]->data = right->data[j + 1]->data;
-			right->data[j]->size = right->data[j + 1]->size;
-			right->child[j] = right->child[j + 1];
+		right->a->size -= 1;
+		for (j = 0; j < right->a->size; ++j) {
+			right->a->keys[j]->data = right->a->keys[j + 1]->data;
+			right->a->keys[j]->size = right->a->keys[j + 1]->size;
+			right->a->data[j]->data = right->a->data[j + 1]->data;
+			right->a->data[j]->size = right->a->data[j + 1]->size;
+			right->a->child[j] = right->a->child[j + 1];
 		}				
-		right->child[j] = right->child[j + 1];
-		db->nodeWriteDisk(db, right);
+		right->a->child[j] = right->a->child[j + 1];
+		//db->nodeWriteDisk(db, right);
 	} else if (i > 0) {
 		//printf("check ok1 %d %d\n", left->size, node->size);
 		db->merge(db, root, left, node, i - 1);
 		//printf("check ok2 %d %d\n", left->size, node->size);
-		node->size = left->size;
-		node->leaf = left->leaf;
-		node->numberOfBlock = left->numberOfBlock;
-		node->keys = left->keys;
-		node->data = left->data;
-		node->child = left->child;
+		node->a->size = left->a->size;
+		node->a->leaf = left->a->leaf;
+		node->a->numberOfBlock = left->a->numberOfBlock;
+		node->a->keys = left->a->keys;
+		node->a->data = left->a->data;
+		node->a->child = left->a->child;
 		//printf("check ok2 %d %d\n", left->size, node->size);
 		--i;
-	} else if (i < root->size) {
+	} else if (i < root->a->size) {
 		db->merge(db, root, node, right, i);
 	} else {
 		printf("truble\n");
 	}
 			
-	db->nodeWriteDisk(db, root);
-	db->nodeWriteDisk(db, node);
+	//db->nodeWriteDisk(db, root);
+	//db->nodeWriteDisk(db, node);
 	//printf("ok\n");
 	//db->deAllocator(db, left);
+	//printf("15\n");
 	//db->deAllocator(db, right);
 }
 
-int myMerge(struct DB *db, struct NODE *root, struct NODE *left, struct NODE *right, int i) {
+int myMerge(struct DB *db, struct POINTER *root, struct POINTER *left, struct POINTER *right, int i) {
 	int j, t;
 	//printf("%d %d %d, i = %d\n", left->size, root->size, right->size, i);
 	t = db->t;
-	left->keys[t - 1]->data = root->keys[i]->data;
-	left->keys[t - 1]->size = root->keys[i]->size;
-	left->data[t - 1]->data = root->data[i]->data;
-	left->data[t - 1]->size = root->data[i]->size;
-	root->size -= 1;
+	left->a->keys[t - 1]->data = root->a->keys[i]->data;
+	left->a->keys[t - 1]->size = root->a->keys[i]->size;
+	left->a->data[t - 1]->data = root->a->data[i]->data;
+	left->a->data[t - 1]->size = root->a->data[i]->size;
+	root->a->size -= 1;
 	//printf("ok\n");
-	for (j = i; j < root->size; ++j) {
-		root->keys[j]->data = root->keys[j + 1]->data;
-		root->keys[j]->size = root->keys[j + 1]->size;
-		root->data[j]->data = root->data[j + 1]->data;
-		root->data[j]->size = root->data[j + 1]->size;
-		root->child[j + 1] = root->child[j + 2];
+	for (j = i; j < root->a->size; ++j) {
+		root->a->keys[j]->data = root->a->keys[j + 1]->data;
+		root->a->keys[j]->size = root->a->keys[j + 1]->size;
+		root->a->data[j]->data = root->a->data[j + 1]->data;
+		root->a->data[j]->size = root->a->data[j + 1]->size;
+		root->a->child[j + 1] = root->a->child[j + 2];
 	}
-	left->size = 2 * t - 1;
+	left->a->size = 2 * t - 1;
 	//printf("ok\n");
-	for (j = 0; j < right->size; ++j) {
-		left->keys[t + j]->data = right->keys[j]->data;
-		left->keys[t + j]->size = right->keys[j]->size;
-		left->data[t + j]->data = right->data[j]->data;
-		left->data[t + j]->size = right->data[j]->size;
-		left->child[t + j] = right->child[j]; 
+	for (j = 0; j < right->a->size; ++j) {
+		left->a->keys[t + j]->data = right->a->keys[j]->data;
+		left->a->keys[t + j]->size = right->a->keys[j]->size;
+		left->a->data[t + j]->data = right->a->data[j]->data;
+		left->a->data[t + j]->size = right->a->data[j]->size;
+		left->a->child[t + j] = right->a->child[j]; 
 	}
-	left->child[left->size] = right->child[j];
-	right->size = 0;
+	left->a->child[left->a->size] = right->a->child[j];
+	right->a->size = 0;
 	//printf("ok\n");
-	db->nodeWriteDisk(db, root);
-	db->nodeWriteDisk(db, left);
-	db->nodeWriteDisk(db, right);
+	//db->nodeWriteDisk(db, root);
+	//db->nodeWriteDisk(db, left);
+	//db->nodeWriteDisk(db, right);
 }
 
 int myDebug(struct DB *db, size_t numberOfBlock, FILE * f) {
-	int i = 0;
-	struct NODE *node = (struct NODE *)calloc(1, sizeof(struct NODE));
+	/*int i = 0;
+	struct POINTER *node = (struct POINTER *)calloc(1, sizeof(struct POINTER));
 	node->numberOfBlock = numberOfBlock;
 	db->allocator(db, node);
-	db->nodeReadDisk(db, node);
+	db->nodeReadDisk(db, node, numberOfBlock);
 	//fprintf(f, "%d\n", node->size);
 	for (i = 0; i < node->size; ++i) {
 		if (node->leaf == 0) {
@@ -520,7 +566,7 @@ int myDebug(struct DB *db, size_t numberOfBlock, FILE * f) {
 		if (node->leaf == 0) {
 			db->debug(db, node->child[i], f);
 		}
-	}
+	}*/
 } 
 
 int myClose(struct DB *db) {
@@ -531,29 +577,40 @@ int myClose(struct DB *db) {
 	fclose(f);
 }
 
-int myNodeReadDisk(struct DB *db, struct NODE *node) {
+int myNodeReadDisk(struct DB *db, struct POINTER *node, size_t numberOfBlock) {
+	if (db->searchHash(db, numberOfBlock, node) == 1) {
+		return 0;
+	}
+	if (db->cashSize == db->numberOfPages) {
+		db->removeHash(db);
+	}
+	//node = (struct NODE *)calloc(1, sizeof(struct NODE));
+	db->allocator(db, node);
+	node->a->numberOfBlock = numberOfBlock;
 	int i;
-	fseek(db->f, db->blockSize * node->numberOfBlock, SEEK_SET);
-	fscanf(db->f, "%zu", &(node->size));
-	fscanf(db->f, "%zu", &(node->leaf));
-	for (i = 0; i < node->size; ++i) {
-		fscanf(db->f, "%zu", &(node->keys[i]->size));
+	fseek(db->f, db->blockSize * node->a->numberOfBlock, SEEK_SET);
+	fscanf(db->f, "%zu", &(node->a->size));
+	//printf("%zu\n", node->size);
+	fscanf(db->f, "%zu", &(node->a->leaf));
+	for (i = 0; i < node->a->size; ++i) {
+		fscanf(db->f, "%zu", &(node->a->keys[i]->size));
 		//printf("%zu\n", node->keys[i]->size);
-		node->keys[i]->data = (char *) calloc(node->keys[i]->size + 1,  sizeof(char));
-		fread (node->keys[i]->data, 1, 1, db->f);
-		fread (node->keys[i]->data, 1, node->keys[i]->size, db->f);
+		node->a->keys[i]->data = (char *) calloc(node->a->keys[i]->size + 1,  sizeof(char));
+		fread (node->a->keys[i]->data, 1, 1, db->f);
+		fread (node->a->keys[i]->data, 1, node->a->keys[i]->size, db->f);
 		//printf("!!! %s\n", node->keys[i]->data);
 		
-		fscanf(db->f, "%zu", &(node->data[i]->size));
+		fscanf(db->f, "%zu", &(node->a->data[i]->size));
 		//printf("%zu", node->data[i]->size);
-		node->data[i]->data = (char *) calloc(node->data[i]->size + 1,  sizeof(char));
-		fread (node->data[i]->data, 1, 1, db->f);
-		fread (node->data[i]->data, 1, node->data[i]->size, db->f);
+		node->a->data[i]->data = (char *) calloc(node->a->data[i]->size + 1,  sizeof(char));
+		fread (node->a->data[i]->data, 1, 1, db->f);
+		fread (node->a->data[i]->data, 1, node->a->data[i]->size, db->f);
 		//printf("!!! %s\n", node->data[i]->data);
 	}
-	for(i = 0; i <= node->size; ++i) {
-		fscanf(db->f, "%zu", &node->child[i]);
+	for(i = 0; i <= node->a->size; ++i) {
+		fscanf(db->f, "%zu", &node->a->child[i]);
 	}
+	db->addHash(db, node);
 }
 
 int myNodeWriteDisk(struct DB *db, struct NODE *node) {
@@ -578,37 +635,129 @@ int myNodeWriteDisk(struct DB *db, struct NODE *node) {
 	}
 }
 
-int myAllocator(struct DB *db, struct NODE *node) {
+int mySearchHash(struct DB *db, size_t x, struct POINTER *node) {
 	int i;
-	node->keys = (struct DBT **) calloc((db->t * 2 - 1),  sizeof(struct DBT *));		
-	node->data = (struct DBT **) calloc((db->t * 2 - 1),  sizeof(struct DBT *));
-	node->child = (size_t *) calloc((db->t * 2),  sizeof(size_t));
+	struct NL * j;
+	i = x % db->H->size;
+	if (db->H->data[i] == 0) {
+		return 0;
+	}
+	j = db->H->data[i]->first;
+	//printf("x = %d, i =  %d, j = %d\n", x, i, db->H->data[i]->first);
+	while(j != 0) {
+		//printf("%d %d\n", j, j->page->numberOfBlock);
+		if (j->page->numberOfBlock == x) {
+			
+			node->a = j->page;
+			
+			db->remove(db->L, j->link);
+			db->add(db->L, db->L->last, j);
+			return 1;
+		}
+		//printf("%d\n", );
+		j = j->next;
+	}
+	
+	return 0;
+}
+
+int myRemoveHash(struct DB *db) {
+	int i;
+	struct NL * j;
+	struct NL * k;
+	
+	i = db->L->first->page->numberOfBlock % db->numberOfPages;
+	j = db->L->first;
+	k = j->link;
+	db->remove(db->L, j);
+	db->remove(db->H->data[i], k);
+		
+	db->nodeWriteDisk(db, j->page);
+	db->deAllocator(db, j->page);
+	db->cashSize -= 1;
+}
+
+int myAddHash(struct DB *db, struct POINTER *node) {
+	 struct NL * nl;
+	 struct NL * nh;
+	 nl = (struct NL *) calloc(1,  sizeof(struct NL));
+	 nh = (struct NL *) calloc(1,  sizeof(struct NL));
+	 nl->link = nh;
+	 nh->link = nl;
+	 nh->page = node->a;
+	 nl->page = node->a;
+	 db->add(db->L, db->L->last, nl);
+	 db->add(db->H->data[node->a->numberOfBlock % db->H->size], db->H->data[node->a->numberOfBlock % db->H->size]->last, nh);
+	 db->cashSize += 1;
+}
+
+int myRemove(struct LIST * l, struct NL * n) {
+	if (n->next == 0 && n->prev == 0) {
+		l->last = 0;
+		l->first = 0;
+		return 0;
+	}
+	if (n->next != 0) {
+		n->next->prev = n->prev;
+	} else {
+		l->last = n->prev;
+	}
+	
+	if (n->prev != 0) {
+		n->prev->next = n->next;
+	} else {
+		l->first = n->next;
+	}
+}
+
+int myAdd(struct LIST * l, struct NL * a, struct NL * b) {
+	if (a == 0) {
+		l->first = b;
+		l->last = b;
+	} else {
+		b->prev = a;
+		b->next = a->next;
+		a->next = b;
+	}
+	//printf("add = %d\n", l->last);
+}
+
+int myAllocator(struct DB *db, struct POINTER *node) {
+	int i;
+	//printf("Alloc %d\n", db->t);
+	node->a->keys = (struct DBT **) calloc((db->t * 2 - 1),  sizeof(struct DBT *));		
+	node->a->data = (struct DBT **) calloc((db->t * 2 - 1),  sizeof(struct DBT *));
+	node->a->child = (size_t *) calloc((db->t * 2),  sizeof(size_t));
 	for (i = 0; i < db->t * 2 - 1; ++i) {	
-		node->keys[i] = (struct DBT *) calloc(1,  sizeof(struct DBT));
-		node->data[i] = (struct DBT *) calloc(1,  sizeof(struct DBT));
+		node->a->keys[i] = (struct DBT *) calloc(1,  sizeof(struct DBT));
+		node->a->data[i] = (struct DBT *) calloc(1,  sizeof(struct DBT));
 	}
 }
 
 int myDeAllocator(struct DB *db, struct NODE *node) {
 	/*int i;
-	//printf("%zu\n", node->size);
-	//printf("i = %d %s ok\n", node->keys[0]->size, node->keys[0]->data);
-	for (i = 0; i < db->t * 2 - 1; ++i) {
+	if (db == 0) {
+		return 0;
+	}
+	//printf("node size = %zu\n", node->size);
+	//printf("%d %s ok\n", node->keys[0]->size, node->keys[0]->data);
+	for (i = 0; i < node->size; ++i) {
 		//printf("i = %d %s ok\n", node->keys[i]->size, node->keys[i]->data);
 		if (node->keys[i]->data != 0) {
 			free(node->keys[i]->data);
 		}
-		free(node->keys[i]);
 		if (node->data[i]->data != 0) {
 			free(node->data[i]->data);
 		}
+	}
+	for (i = 0; i < db->t * 2 - 1; ++i) {
+		free(node->keys[i]);
 		free(node->data[i]);
 	}
 	//printf("end i\n");
 	free(node->keys);
 	free(node->data);
-	free(node->child);
-	free(node);*/
+	free(node->child);*/
 }
 
 int myCmp(struct DBT * a, struct DBT * b) {
@@ -631,12 +780,26 @@ int myCmp(struct DBT * a, struct DBT * b) {
 }
 
 struct DB *dbcreate(char *path, struct DBC *conf) {
+	int i;
+	
 	struct DB *db = (struct DB *)calloc(1, sizeof(struct DB));
 	db->f = fopen("mytempfile.txt", "w+");
 	db->blockSize = conf->page_size;
-	db->t = 3;
+	db->t = 6;
 	db->numberOfBlocks = 1;
 	db->root = 0;
+	db->numberOfPages = conf->cache_size / conf->page_size;
+	db->cashSize = 0;
+	db->L = (struct LIST *) calloc(1,  sizeof(struct LIST));
+	db->L->first = 0;
+	db->H = (struct HASH *) calloc(1,  sizeof(struct HASH));
+	db->H->size = db->numberOfPages * 3;
+	db->H->data = (struct LIST **) calloc((db->H->size),  sizeof(struct LIST *));
+	for (i = 0; i < db->H->size; ++i) {
+		db->H->data[i] = (struct LIST *) calloc(1,  sizeof(struct LIST));
+		db->H->data[i]->first = 0;
+		db->H->data[i]->last = 0;
+	}
 		
 	db->insert = myInsert;
 	db->nodeInsert = myNodeInsert;
@@ -653,16 +816,22 @@ struct DB *dbcreate(char *path, struct DBC *conf) {
 	db->nodeDel = myNodeDel;
 	db->check = myCheck;
 	db->merge = myMerge;
+	db->searchHash = mySearchHash;
+	db->removeHash = myRemoveHash;
+	db->addHash = myAddHash;
+	db->remove = myRemove;
+	db->add = myAdd;
 	
 	db->debug = myDebug;
 	
-	struct NODE *root = (struct NODE *)calloc(1, sizeof(struct NODE));
+	struct POINTER *root = (struct POINTER *)calloc(1, sizeof(struct POINTER));
+	root->a = (struct NODE *)calloc(1, sizeof(struct NODE));
 	db->allocator(db, root);
-	root->size = 0;
-	root->leaf = 1;
-	root->numberOfBlock = 0;
-	db->nodeWriteDisk(db, root);
-	db->deAllocator(db, root);
+	root->a->size = 0;
+	root->a->leaf = 1;
+	root->a->numberOfBlock = 0;
+	db->nodeWriteDisk(db, root->a);
+	db->deAllocator(db, root->a);
 	
 	return db;
 }
